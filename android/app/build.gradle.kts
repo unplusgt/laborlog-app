@@ -19,6 +19,22 @@ android {
         jvmTarget = JavaVersion.VERSION_17.toString()
     }
 
+    signingConfigs {
+        // Llave fija para los APK de prueba que compila GitHub (.github/workflows/apk-android.yml):
+        // así el celular acepta cada actualización sin desinstalar la app.
+        // Sin la variable (compilación local) se usa la llave debug normal de la PC.
+        val llaveFija = System.getenv("LABORLOG_DEBUG_KEYSTORE")
+        if (llaveFija != null && file(llaveFija).exists()) {
+            getByName("debug") {
+                storeFile = file(llaveFija)
+                storeType = "pkcs12"
+                storePassword = "android"
+                keyAlias = "androiddebugkey"
+                keyPassword = "android"
+            }
+        }
+    }
+
     defaultConfig {
         // TODO: Specify your own unique Application ID (https://developer.android.com/studio/build/application-id.html).
         applicationId = "com.example.laborlog_app"
