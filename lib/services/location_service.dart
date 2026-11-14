@@ -1,81 +1,86 @@
-import 'dart:async';
-import 'dart:html' as html;
-import 'package:flutter/foundation.dart';
+import 'package:geolocator/geolocator.dart';
 
+/// Posición GPS lista para enviar en un marcaje.
+class Ubicacion {
+  final double lat;
+  final double lng;
+
+  /// Radio de incertidumbre reportado por el GPS, en metros.
+  final double precisionMetros;
+
+  /// true si Android indica que viene de una app de ubicación falsa.
+  final bool simulada;
+  final DateTime obtenidaEn;
+
+  const Ubicacion({
+    required this.lat,
+    required this.lng,
+    required this.precisionMetros,
+    required this.simulada,
+    required this.obtenidaEn,
+  });
+
+  bool esReciente([Duration maxEdad = const Duration(minutes: 2)]) =>
+      DateTime.now().difference(obtenidaEn) <= maxEdad;
+}
+
+class LocationException implements Exception {
+  final String message;
+  LocationException(this.message);
+
+  @override
+  String toString() => message;
+}
+
+/// Ubicación del dispositivo con `geolocator` (Android, iOS y web).
 class LocationService {
+  static const Duration _timeout = Duration(seconds: 20);
+
+  static Future<Ubicacion> obtenerUbicacion() async {
+    if (!await Geolocator.isLocationServiceEnabled()) {
+      throw LocationException('El GPS está apagado. Actívalo para marcar asistencia.');
+    }
+
+    var permiso = await Geolocator.checkPermission();
+    if (permiso == LocationPermission.denied) {
+      permiso = await Geolocator.requestPermission();
+    }
+    if (permiso == LocationPermission.denied) {
+      throw LocationException('Se necesita permiso de ubicación para marcar asistencia.');
+    }
+    if (permiso == LocationPermission.deniedForever) {
+      throw LocationException(
+          'El permiso de ubicación está bloqueado. Habilítalo en Ajustes > Aplicaciones > LaborLog.');
+    }
+
+    try {
+      final p = await Geolocator.getCurrentPosition(
+        locationSettings: const LocationSettings(
+          accuracy: LocationAccuracy.high,
+          timeLimit: _timeout,
+        ),
+      );
+      return Ubicacion(
+        lat: p.latitude,
+        lng: p.longitude,
+        precisionMetros: p.accuracy,
+        simulada: p.isMocked,
+        obtenidaEn: DateTime.now(),
+      );
+    } on LocationServiceDisabledException {
+      throw LocationException('El GPS está apagado. Actívalo para marcar asistencia.');
+    } catch (e) {
+      throw LocationException('No se pudo obtener la ubicación. Sal a cielo abierto e intenta de nuevo.');
+    }
+  }
+
+  /// Compatibilidad con las pantallas existentes (formulario de obras, marcaje web).
   static Future<Map<String, double>?> getCurrentPosition() async {
-    if (!kIsWeb) {
-      // Para dispositivos móviles se usaría geolocator
-      return null;
-    }
-    
-    try {
-      // Para web usamos la API nativa del navegador
-      final position = await _getCurrentPositionWeb();
-      return {
-        'latitude': position['latitude']!,
-        'longitude': position['longitude']!,
-      };
-    } catch (e) {
-      print('Error obteniendo ubicación: $e');
-      rethrow; // Propagar el error para mostrarlo al usuario
-    }
-  }
-  
-  static Future<Map<String, double>> _getCurrentPositionWeb() async {
-    final navigator = html.window.navigator;
-    final geolocation = navigator.geolocation;
-    
-    if (geolocation == null) {
-      throw Exception('Geolocalización no soportada por el navegador');
-    }
-    
-    final completer = Completer<Map<String, double>>();
-    
-    geolocation.getCurrentPosition().then((html.Geoposition position) {
-      final coords = position.coords;
-      if (coords != null) {
-        completer.complete({
-          'latitude': coords.latitude!.toDouble(),
-          'longitude': coords.longitude!.toDouble(),
-        });
-      } else {
-        completer.completeError(Exception('No se pudieron obtener las coordenadas'));
-      }
-    }).catchError((error) {
-      String errorMessage;
-      if (error is html.PositionError) {
-        switch (error.code) {
-          case 1:
-            errorMessage = 'Acceso denegado a la ubicación. Por favor, permite el acceso en tu navegador.';
-            break;
-          case 2:
-            errorMessage = 'Ubicación no disponible. Verifica que tengas GPS activado.';
-            break;
-          case 3:
-            errorMessage = 'Tiempo de espera agotado. Intenta de nuevo.';
-            break;
-          default:
-            errorMessage = 'Error desconocido al obtener ubicación.';
-        }
-      } else {
-        errorMessage = 'Error al acceder a la ubicación: $error';
-      }
-      completer.completeError(Exception(errorMessage));
-    });
-    
-    return completer.future;
-  }
-  
-  static Future<bool> isLocationPermissionGranted() async {
-    if (!kIsWeb) return false;
-    
-    try {
-      // Intentamos obtener la ubicación para verificar permisos
-      await _getCurrentPositionWeb();
-      return true;
-    } catch (e) {
-      return false;
-    }
+    final u = await obtenerUbicacion();
+    return {
+      'latitude': u.lat,
+      'longitude': u.lng,
+      'accuracy': u.precisionMetros,
+    };
   }
 }

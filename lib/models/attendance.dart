@@ -11,6 +11,9 @@ class Marcaje {
   final String? fotoPath;
   final String? estadoSync;
   final String? razonConflicto;
+  final double? precisionMetros;
+  final bool ubicacionSimulada;
+  final bool capturadoOffline;
 
   Marcaje({
     required this.id,
@@ -25,6 +28,9 @@ class Marcaje {
     this.fotoPath,
     this.estadoSync,
     this.razonConflicto,
+    this.precisionMetros,
+    this.ubicacionSimulada = false,
+    this.capturadoOffline = false,
   });
 
   factory Marcaje.fromJson(Map<String, dynamic> json) {
@@ -43,11 +49,15 @@ class Marcaje {
       fotoPath: json['foto_path'],
       estadoSync: json['estado_sync'],
       razonConflicto: json['razon_conflicto'],
+      precisionMetros: (json['precision_metros'] as num?)?.toDouble(),
+      capturadoOffline: json['capturado_offline'] ?? false,
     );
   }
 
   Map<String, dynamic> toJson() {
     return {
+      // Id generado en el cliente: si se reenvía, el servidor no lo duplica
+      if (id.isNotEmpty) 'id': id,
       'trabajador_id': trabajadorId,
       'obra_id': obraId,
       'tipo': tipo,
@@ -56,8 +66,8 @@ class Marcaje {
       'lat': lat,
       'lng': lng,
       'foto_path': fotoPath,
-      'estado_sync': estadoSync,
-      'razon_conflicto': razonConflicto,
+      if (precisionMetros != null) 'precision_metros': precisionMetros,
+      'ubicacion_simulada': ubicacionSimulada,
     };
   }
 

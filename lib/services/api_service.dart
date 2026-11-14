@@ -1,6 +1,6 @@
 import 'dart:convert';
 import 'package:http/http.dart' as http;
-import '../utils/constants.dart';
+import '../utils/app_config.dart';
 import '../models/trabajador.dart';
 import '../models/obra.dart';
 import '../models/attendance.dart';
@@ -18,7 +18,7 @@ class ApiException implements Exception {
 }
 
 class ApiService {
-  static const String baseUrl = Constants.apiUrl;
+  static String get baseUrl => AppConfig.apiUrl;
 
   // Helper para manejo de errores de respuesta: usa el mensaje del backend
   // (campo "error"), p. ej. "Fuera del área de la obra: está a 120 m (máximo 50 m)".
@@ -170,6 +170,27 @@ class ApiService {
     _checkResponse(response);
     
     return Dispositivo.fromJson(json.decode(response.body));
+  }
+
+  /// Cambia solo los campos indicados (obra asignada, activo, nombre).
+  static Future<Dispositivo> updateDispositivo(String id, Map<String, dynamic> cambios) async {
+    final response = await http.put(
+      Uri.parse('$baseUrl/dispositivos/$id'),
+      headers: AuthService.authHeaders,
+      body: json.encode(cambios),
+    );
+    _checkResponse(response);
+    return Dispositivo.fromJson(json.decode(utf8.decode(response.bodyBytes)));
+  }
+
+  /// Genera un token nuevo (el anterior deja de funcionar). Viene en Dispositivo.token.
+  static Future<Dispositivo> rotarTokenDispositivo(String id) async {
+    final response = await http.post(
+      Uri.parse('$baseUrl/dispositivos/$id/token'),
+      headers: AuthService.authHeaders,
+    );
+    _checkResponse(response);
+    return Dispositivo.fromJson(json.decode(utf8.decode(response.bodyBytes)));
   }
 
   // =================================================================

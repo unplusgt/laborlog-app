@@ -111,6 +111,13 @@ class _HomeScreenState extends State<HomeScreen> {
                     Colors.purple,
                     () => Navigator.pushNamed(context, '/obras'),
                   ),
+                  if (AuthService.isAdmin)
+                    _buildMenuCard(
+                      'Dispositivos\n(kiosco)',
+                      Icons.phone_android,
+                      Colors.teal,
+                      () => Navigator.pushNamed(context, '/dispositivos'),
+                    ),
                 ],
               ),
             ),

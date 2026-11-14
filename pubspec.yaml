@@ -1,5 +1,5 @@
 name: laborlog_app
-description: "A new Flutter project."
+description: "LaborLog: control de asistencia en obras."
 # The following line prevents the package from being accidentally published to
 # pub.dev using `flutter pub publish`. This is preferred for private packages.
 publish_to: 'none' # Remove this line if you wish to publish to pub.dev
@@ -40,10 +40,15 @@ dependencies:
   
   # Para descargar archivos en Flutter Web
   universal_html: ^2.2.4
-  
-  # Geolocalización
-  geolocator: ^10.1.0
-  permission_handler: ^11.2.0
+
+  # GPS nativo (Android/iOS) y web; en Android detecta ubicaciones simuladas
+  geolocator: ^14.1.2
+  # Cola offline de marcajes y catálogo del kiosco
+  shared_preferences: ^2.5.5
+  # Token del dispositivo (cifrado en Android Keystore / iOS Keychain)
+  flutter_secure_storage: ^11.2.0
+  # Id de cada marcaje generado en el teléfono (evita duplicados al reenviar)
+  uuid: ^4.6.0
 
 dev_dependencies:
   flutter_test:

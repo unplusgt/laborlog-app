@@ -1,6 +1,7 @@
 import 'dart:convert';
+import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
-import '../utils/constants.dart';
+import '../utils/app_config.dart';
 import '../models/user.dart';
 
 class AuthService {
@@ -25,32 +26,23 @@ class AuthService {
 
   Future<bool> login(String email, String password) async {
     try {
-      print('🔐 Iniciando login...');
-      print('📧 Email: $email');
-      print('🌐 URL: ${Constants.apiUrl}/login');
-      
       final response = await http.post(
-        Uri.parse('${Constants.apiUrl}/login'),
+        Uri.parse('${AppConfig.apiUrl}/login'),
         headers: {'Content-Type': 'application/x-www-form-urlencoded'},
         body: 'username=${Uri.encodeComponent(email)}&password=${Uri.encodeComponent(password)}',
       );
       
-      print('📡 Response status: ${response.statusCode}');
-      print('📄 Response body: ${response.body}');
-      
       if (response.statusCode == 200) {
         final data = json.decode(response.body);
         _token = data['access_token'];
-        print('✅ Token recibido: ${_token!.substring(0, 20)}...');
-        
+
         // Obtener información del usuario
         await _fetchCurrentUser();
         return true;
       }
       
-      print('❌ Login failed: ${response.statusCode} - ${response.body}');
     } catch (e) {
-      print('💥 Login error: $e');
+      debugPrint('Error de conexión en login: $e');
     }
     return false;
   }
@@ -60,7 +52,7 @@ class AuthService {
     
     try {
       final response = await http.get(
-        Uri.parse('${Constants.apiUrl}/me'),
+        Uri.parse('${AppConfig.apiUrl}/me'),
         headers: authHeaders,
       );
       
@@ -89,7 +81,7 @@ class AuthService {
     
     try {
       final response = await http.get(
-        Uri.parse('${Constants.apiUrl}/me'),
+        Uri.parse('${AppConfig.apiUrl}/me'),
         headers: authHeaders,
       );
       

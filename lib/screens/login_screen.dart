@@ -15,10 +15,6 @@ class _LoginScreenState extends State<LoginScreen> {
   String? _error;
 
   void _login() async {
-    print('🚀 _login() called');
-    print('📧 Email from controller: "${_emailController.text.trim()}"');
-    print('🔒 Password length: ${_passwordController.text.trim().length}');
-    
     setState(() {
       _loading = true;
       _error = null;
@@ -27,16 +23,12 @@ class _LoginScreenState extends State<LoginScreen> {
       _emailController.text.trim(),
       _passwordController.text.trim(),
     );
-    print('📊 Login result: $success');
-    
     setState(() {
       _loading = false;
     });
     if (success) {
-      print('✅ Navigating to home...');
       Navigator.pushReplacementNamed(context, '/home');
     } else {
-      print('❌ Login failed, showing error');
       setState(() {
         _error = 'Credenciales incorrectas o error de conexión';
       });
@@ -62,6 +54,12 @@ class _LoginScreenState extends State<LoginScreen> {
               SizedBox(height: 8),
             ],
             CustomButton(text: 'Iniciar sesión', onPressed: _loading ? null : () => _login()),
+            SizedBox(height: 24),
+            TextButton.icon(
+              onPressed: () => Navigator.pushNamed(context, '/kiosco/activar'),
+              icon: Icon(Icons.phonelink_lock),
+              label: Text('Usar este teléfono como kiosco de obra'),
+            ),
           ],
         ),
       ),

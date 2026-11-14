@@ -5,6 +5,7 @@ import '../models/trabajador.dart';
 import '../models/obra.dart';
 import '../models/attendance.dart';
 import '../models/dispositivo.dart';
+import 'package:uuid/uuid.dart';
 import 'dart:math';
 
 class AttendanceScreen extends StatefulWidget {
@@ -35,6 +36,7 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
 
   // Control GPS y marcajes - optimizado para uso múltiple
   Map<String, double>? _currentLocation;
+  Ubicacion? _ubicacion; // incluye precisión y si es GPS falso
   DateTime? _locationTimestamp;
   double? _distanceToObra;
   bool _gettingLocation = false;
@@ -152,9 +154,13 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
     });
 
     try {
-      final location = await LocationService.getCurrentPosition();
+      final ubicacion = await LocationService.obtenerUbicacion();
       setState(() {
-        _currentLocation = location;
+        _ubicacion = ubicacion;
+        _currentLocation = {
+          'latitude': ubicacion.lat,
+          'longitude': ubicacion.lng,
+        };
         _locationTimestamp = DateTime.now();
         _gettingLocation = false;
       });
@@ -354,7 +360,7 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
     try {
       // Crear marcaje con coordenadas GPS reales
       final marcaje = Marcaje(
-        id: '', // Se asignará en el backend
+        id: const Uuid().v4(), // si se reintenta, el servidor no lo duplica
         trabajadorId: targetTrabajador.id,
         obraId: _selectedObra!.id,
         tipo: _tipoMarcaje,
@@ -362,6 +368,8 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
         origen: _dispositivos.first.id,
         lat: _currentLocation!['latitude']!.toStringAsFixed(6),
         lng: _currentLocation!['longitude']!.toStringAsFixed(6),
+        precisionMetros: _ubicacion?.precisionMetros,
+        ubicacionSimulada: _ubicacion?.simulada ?? false,
       );
 
       final resultado = await ApiService.createMarcaje(marcaje);
