@@ -4,6 +4,9 @@
     <!-- Geocerca de la obra al marcar -->
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION"/>
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION"/>
+    <!-- Reconocimiento facial al marcar y al registrar rostros -->
+    <uses-permission android:name="android.permission.CAMERA"/>
+    <uses-feature android:name="android.hardware.camera.front" android:required="false"/>
     <application
         android:label="LaborLog"
         android:name="${applicationName}"

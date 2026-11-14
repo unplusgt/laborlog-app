@@ -1,14 +1,19 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:uuid/uuid.dart';
 
 import '../models/kiosco.dart';
+import '../rostro/comparacion.dart';
+import '../rostro/escaner_rostro.dart';
+import '../rostro/servicio_rostro.dart';
 import '../services/auth_service.dart';
 import '../services/location_service.dart';
 import '../services/sync_service.dart';
 import '../utils/geo.dart';
 import '../utils/reglas_marcaje.dart';
+import 'registro_rostro_screen.dart';
 
 /// Pantalla del teléfono instalado en la obra. Los trabajadores buscan su nombre y
 /// marcan; el marcaje se guarda en el teléfono y se envía cuando hay conexión.
@@ -35,6 +40,10 @@ class _KioscoScreenState extends State<KioscoScreen> with WidgetsBindingObserver
   DateTime _ahora = DateTime.now();
   bool _marcando = false;
   Timer? _timerSync;
+
+  /// Última captura que no se reconoció: si la persona luego busca su nombre, la foto
+  /// va como evidencia (el servidor lo deja en conflicto para revisión).
+  CapturaRostro? _capturaSinReconocer;
   Timer? _timerReloj;
 
   @override
@@ -145,8 +154,9 @@ class _KioscoScreenState extends State<KioscoScreen> with WidgetsBindingObserver
     return tipoSiguiente(ultimoTipo: u?.tipo, ultimoEn: u?.en, ahora: DateTime.now().toUtc());
   }
 
-  Future<void> _abrirTrabajador(KioscoTrabajador t) async {
+  Future<void> _abrirTrabajador(KioscoTrabajador t, {CapturaRostro? captura, double? similitud}) async {
     final tipo = _tipoPara(t);
+    final reconocido = captura != null && similitud != null;
     final otro = tipo == 'entrada' ? 'salida' : 'entrada';
     final ultimo = _ultimos[t.id];
     final elegido = await showModalBottomSheet<String>(
@@ -158,6 +168,19 @@ class _KioscoScreenState extends State<KioscoScreen> with WidgetsBindingObserver
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
+              if (reconocido)
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 8),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      CircleAvatar(radius: 36, backgroundImage: MemoryImage(captura.jpeg)),
+                      const SizedBox(width: 12),
+                      const Icon(Icons.verified, color: Colors.green),
+                      const Text(' Reconocido', style: TextStyle(color: Colors.green)),
+                    ],
+                  ),
+                ),
               Text(t.nombre, style: Theme.of(ctx).textTheme.headlineSmall, textAlign: TextAlign.center),
               if (ultimo != null)
                 Padding(
@@ -182,15 +205,77 @@ class _KioscoScreenState extends State<KioscoScreen> with WidgetsBindingObserver
                 onPressed: () => Navigator.pop(ctx, otro),
                 child: Text('No es correcto: marcar ${otro.toUpperCase()}'),
               ),
+              if (reconocido)
+                TextButton(
+                  onPressed: () => Navigator.pop(ctx, 'no_soy'),
+                  child: const Text('No soy yo', style: TextStyle(color: Colors.red)),
+                ),
             ],
           ),
         ),
       ),
     );
-    if (elegido != null) await _marcar(t, elegido);
+    if (elegido == 'no_soy') {
+      _capturaSinReconocer = captura;
+      _aviso('Busca tu nombre en la lista para marcar.');
+      return;
+    }
+    if (elegido == null) return;
+    if (reconocido) {
+      await _marcar(t, elegido, captura: captura, similitud: similitud);
+    } else {
+      // Marcaje manual: si hace poco la cámara no lo reconoció, se adjunta esa foto
+      final reciente = _capturaSinReconocer != null &&
+          DateTime.now().difference(_capturaSinReconocer!.en) < const Duration(minutes: 2);
+      await _marcar(t, elegido, captura: reciente ? _capturaSinReconocer : null);
+      _capturaSinReconocer = null;
+    }
   }
 
-  Future<void> _marcar(KioscoTrabajador t, String tipo) async {
+  /// La persona mira la cámara; la app la identifica sin conexión entre los
+  /// trabajadores con rostro registrado.
+  Future<void> _marcarConRostro() async {
+    final config = _config;
+    if (config == null) return;
+    final candidatos = <Candidato>[];
+    for (final t in config.trabajadores) {
+      if (t.huellaB64 == null) continue;
+      try {
+        candidatos.add(Candidato(t.id, t.nombre, huellaDeBase64(t.huellaB64!)));
+      } catch (_) {}
+    }
+    if (candidatos.isEmpty) {
+      _error('Aún no hay rostros registrados. Un supervisor puede registrarlos en el menú ⋮ > Registrar rostros.');
+      return;
+    }
+    final capturas = await EscanerRostroScreen.abrir(context, titulo: 'Marcar con mi rostro');
+    if (capturas == null || capturas.isEmpty || !mounted) return;
+    final captura = capturas.first;
+    final r = identificar(captura.huella, candidatos);
+    if (r.reconocido) {
+      final t = config.trabajadores.firstWhere((x) => x.id == r.candidato!.id);
+      await _abrirTrabajador(t, captura: captura, similitud: r.mejor);
+      return;
+    }
+    _capturaSinReconocer = captura;
+    if (!mounted) return;
+    final accion = await showDialog<String>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        icon: const Icon(Icons.help_outline, size: 48),
+        title: const Text('No te reconocí'),
+        content: const Text('Intenta de nuevo con buena luz y la cara completa en el óvalo, '
+            'o busca tu nombre en la lista.'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, 'nombre'), child: const Text('Buscar mi nombre')),
+          FilledButton(onPressed: () => Navigator.pop(ctx, 'otra'), child: const Text('Intentar de nuevo')),
+        ],
+      ),
+    );
+    if (accion == 'otra') await _marcarConRostro();
+  }
+
+  Future<void> _marcar(KioscoTrabajador t, String tipo, {CapturaRostro? captura, double? similitud}) async {
     final obra = _config?.obra;
     if (obra == null) {
       _error('Este teléfono no tiene obra asignada. Pide al administrador que la asigne.');
@@ -214,8 +299,11 @@ class _KioscoScreenState extends State<KioscoScreen> with WidgetsBindingObserver
             '${u.precisionMetros > 30 ? '\n\nLa señal GPS es débil (±${u.precisionMetros.toStringAsFixed(0)} m); sal a cielo abierto.' : ''}');
         return;
       }
+      final id = const Uuid().v4();
+      final fotoRef = captura != null ? await _svc.guardarFoto(id, captura.jpeg) : null;
+      final porRostro = captura != null && similitud != null;
       final marcaje = MarcajePendiente(
-        id: const Uuid().v4(),
+        id: id,
         trabajadorId: t.id,
         trabajadorNombre: t.nombre,
         obraId: obra.id,
@@ -225,6 +313,10 @@ class _KioscoScreenState extends State<KioscoScreen> with WidgetsBindingObserver
         lng: u.lng,
         precisionMetros: u.precisionMetros,
         ubicacionSimulada: u.simulada,
+        metodo: porRostro ? 'rostro' : 'manual',
+        similitud: porRostro ? similitud : null,
+        pruebaVida: captura?.pruebaVida,
+        fotoRef: fotoRef,
       );
       await _svc.encolar(marcaje);
       await _refrescarEstado();
@@ -280,6 +372,57 @@ class _KioscoScreenState extends State<KioscoScreen> with WidgetsBindingObserver
   Future<void> _verRechazados() async {
     await Navigator.push(context, MaterialPageRoute(builder: (_) => const _RechazadosScreen()));
     await _refrescarEstado();
+  }
+
+  /// Pide usuario y contraseña de un supervisor/administrador. Deja la sesión abierta
+  /// (quien llama debe cerrarla) y devuelve true si se pudo entrar con ese rol.
+  Future<bool> _loginSupervisor(String titulo, {bool soloAdmin = false}) async {
+    final email = TextEditingController();
+    final password = TextEditingController();
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(titulo),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(soloAdmin ? 'Requiere un usuario administrador.' : 'Requiere un supervisor o administrador.'),
+            TextField(controller: email, keyboardType: TextInputType.emailAddress, decoration: const InputDecoration(labelText: 'Email')),
+            TextField(controller: password, obscureText: true, decoration: const InputDecoration(labelText: 'Contraseña')),
+          ],
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancelar')),
+          FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Entrar')),
+        ],
+      ),
+    );
+    if (ok != true) return false;
+    final auth = AuthService();
+    final entro = await auth.login(email.text.trim(), password.text);
+    final rol = AuthService.currentUser?.rol;
+    final permitido = soloAdmin ? AuthService.isAdmin : const ['supervisor', 'admin', 'superadmin'].contains(rol);
+    if (!entro || !permitido) {
+      await auth.logout();
+      _error(entro ? 'Tu usuario no tiene permiso para esto.' : 'Credenciales incorrectas o sin conexión.');
+      return false;
+    }
+    return true;
+  }
+
+  Future<void> _registrarRostros() async {
+    if (kIsWeb) {
+      _error('El registro de rostros se hace desde la app del celular.');
+      return;
+    }
+    if (!await _loginSupervisor('Registrar rostros')) return;
+    if (!mounted) return;
+    try {
+      await Navigator.push(context, MaterialPageRoute(builder: (_) => const _RegistroRostrosKiosco()));
+    } finally {
+      await AuthService().logout();
+      await _refrescarEstado();
+    }
   }
 
   Future<void> _salirDelKiosco() async {
@@ -400,6 +543,8 @@ class _KioscoScreenState extends State<KioscoScreen> with WidgetsBindingObserver
                   _sincronizar(manual: true);
                 case 'rechazados':
                   _verRechazados();
+                case 'rostros':
+                  _registrarRostros();
                 case 'salir':
                   _salirDelKiosco();
               }
@@ -407,6 +552,7 @@ class _KioscoScreenState extends State<KioscoScreen> with WidgetsBindingObserver
             itemBuilder: (_) => [
               const PopupMenuItem(value: 'sync', child: Text('Sincronizar ahora')),
               PopupMenuItem(value: 'rechazados', child: Text('Rechazados ($_rechazados)')),
+              const PopupMenuItem(value: 'rostros', child: Text('Registrar rostros')),
               const PopupMenuItem(value: 'salir', child: Text('Salir del modo kiosco')),
             ],
           ),
@@ -434,6 +580,19 @@ class _KioscoScreenState extends State<KioscoScreen> with WidgetsBindingObserver
               child: Text(
                 'Sin conexión: los marcajes se guardan en el teléfono'
                 '${_ultimaSync != null ? ' · última sincronización ${_hora(_ultimaSync!)}' : ''}',
+              ),
+            ),
+          if (!kIsWeb && config.trabajadores.any((t) => t.tieneRostro))
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+              child: SizedBox(
+                width: double.infinity,
+                height: 72,
+                child: FilledButton.icon(
+                  onPressed: _marcando ? null : _marcarConRostro,
+                  icon: const Icon(Icons.face_retouching_natural, size: 32),
+                  label: const Text('Marcar con mi rostro', style: TextStyle(fontSize: 22)),
+                ),
               ),
             ),
           Padding(
@@ -476,9 +635,10 @@ class _KioscoScreenState extends State<KioscoScreen> with WidgetsBindingObserver
                             child: Text(t.nombre.isNotEmpty ? t.nombre[0].toUpperCase() : '?'),
                           ),
                           title: Text(t.nombre, style: const TextStyle(fontSize: 18)),
-                          subtitle: Text(dentro && ultimo != null
-                              ? 'En obra desde ${_hora(ultimo.en)}'
-                              : (t.codigoEmpresa ?? '')),
+                          subtitle: Text([
+                            if (dentro && ultimo != null) 'En obra desde ${_hora(ultimo.en)}' else if (t.codigoEmpresa != null) t.codigoEmpresa!,
+                            if (!t.tieneRostro) 'sin rostro',
+                          ].join(' · ')),
                           trailing: Chip(
                             label: Text(tipo.toUpperCase(),
                                 style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
@@ -540,6 +700,71 @@ class _RechazadosScreenState extends State<_RechazadosScreen> {
                     },
                     child: const Text('Descartar'),
                   ),
+                );
+              },
+            ),
+    );
+  }
+}
+
+
+/// Lista de trabajadores para registrar su rostro desde el kiosco (con sesión de supervisor).
+class _RegistroRostrosKiosco extends StatefulWidget {
+  const _RegistroRostrosKiosco();
+
+  @override
+  State<_RegistroRostrosKiosco> createState() => _RegistroRostrosKioscoState();
+}
+
+class _RegistroRostrosKioscoState extends State<_RegistroRostrosKiosco> {
+  KioscoConfig? _config;
+  String? _error;
+
+  @override
+  void initState() {
+    super.initState();
+    _cargar();
+  }
+
+  Future<void> _cargar({bool descargar = false}) async {
+    try {
+      final config = descargar
+          ? await KioscoService.instancia.actualizarConfig()
+          : await KioscoService.instancia.configGuardada();
+      if (mounted) setState(() => _config = config);
+    } catch (e) {
+      if (mounted) setState(() => _error = e.toString());
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final trabajadores = _config?.trabajadores ?? [];
+    final registrados = trabajadores.where((t) => t.tieneRostro).length;
+    return Scaffold(
+      appBar: AppBar(title: Text('Registrar rostros ($registrados/${trabajadores.length})')),
+      body: _error != null
+          ? Center(child: Text(_error!, style: const TextStyle(color: Colors.red)))
+          : ListView.separated(
+              itemCount: trabajadores.length,
+              separatorBuilder: (_, _) => const Divider(height: 1),
+              itemBuilder: (_, i) {
+                final t = trabajadores[i];
+                return ListTile(
+                  leading: Icon(t.tieneRostro ? Icons.verified_user : Icons.face_outlined,
+                      color: t.tieneRostro ? Colors.green : Colors.grey),
+                  title: Text(t.nombre),
+                  subtitle: Text(t.tieneRostro ? 'Rostro registrado' : 'Sin rostro'),
+                  trailing: Text(t.tieneRostro ? 'Reemplazar' : 'Registrar'),
+                  onTap: () async {
+                    final ok = await RegistroRostroScreen.abrir(
+                      context,
+                      trabajadorId: t.id,
+                      nombre: t.nombre,
+                      yaRegistrado: t.tieneRostro,
+                    );
+                    if (ok) await _cargar(descargar: true);
+                  },
                 );
               },
             ),

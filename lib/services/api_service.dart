@@ -81,6 +81,31 @@ class ApiService {
     return Trabajador.fromJson(json.decode(response.body));
   }
 
+  /// Registra el rostro (huella + foto alineada). Requiere sesión de supervisor o admin.
+  static Future<Trabajador> registrarRostro(String trabajadorId, String huellaB64, String fotoB64) async {
+    final response = await http.put(
+      Uri.parse('$baseUrl/trabajadores/$trabajadorId/rostro'),
+      headers: AuthService.authHeaders,
+      body: json.encode({
+        'huella_b64': huellaB64,
+        'foto_jpeg_b64': fotoB64,
+        'consentimiento': true,
+        'modelo': 'sface-2021dec',
+      }),
+    );
+    _checkResponse(response);
+    return Trabajador.fromJson(json.decode(utf8.decode(response.bodyBytes)));
+  }
+
+  static Future<Trabajador> borrarRostro(String trabajadorId) async {
+    final response = await http.delete(
+      Uri.parse('$baseUrl/trabajadores/$trabajadorId/rostro'),
+      headers: AuthService.authHeaders,
+    );
+    _checkResponse(response);
+    return Trabajador.fromJson(json.decode(utf8.decode(response.bodyBytes)));
+  }
+
   // CRUD Obras
   static Future<List<Obra>> getObras() async {
     final response = await http.get(

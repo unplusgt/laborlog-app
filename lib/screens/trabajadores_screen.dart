@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../models/trabajador.dart';
 import '../services/api_service.dart';
+import 'registro_rostro_screen.dart';
 
 class TrabajadoresScreen extends StatefulWidget {
   @override
@@ -199,6 +200,10 @@ class _TrabajadoresScreenState extends State<TrabajadoresScreen> {
                                 if (trabajador.telefono?.isNotEmpty == true)
                                   Text('📞 ${trabajador.telefono}'),
                                 Text(
+                                  trabajador.rostroRegistrado ? '🙂 Rostro registrado' : '⚪ Sin rostro',
+                                  style: TextStyle(color: trabajador.rostroRegistrado ? Colors.green : Colors.grey),
+                                ),
+                                Text(
                                   trabajador.activo ? '🟢 Activo' : '🔴 Inactivo',
                                   style: TextStyle(
                                     color: trabajador.activo ? Colors.green : Colors.red,
@@ -214,9 +219,34 @@ class _TrabajadoresScreenState extends State<TrabajadoresScreen> {
                                   _editTrabajador(trabajador);
                                 } else if (value == 'toggle') {
                                   _toggleTrabajador(trabajador);
+                                } else if (value == 'rostro') {
+                                  _registrarRostro(trabajador);
+                                } else if (value == 'borrar_rostro') {
+                                  _borrarRostro(trabajador);
                                 }
                               },
                               itemBuilder: (context) => [
+                                PopupMenuItem(
+                                  value: 'rostro',
+                                  child: Row(
+                                    children: [
+                                      Icon(Icons.face, size: 20),
+                                      SizedBox(width: 8),
+                                      Text(trabajador.rostroRegistrado ? 'Reemplazar rostro' : 'Registrar rostro'),
+                                    ],
+                                  ),
+                                ),
+                                if (trabajador.rostroRegistrado)
+                                  PopupMenuItem(
+                                    value: 'borrar_rostro',
+                                    child: Row(
+                                      children: [
+                                        Icon(Icons.no_photography, size: 20),
+                                        SizedBox(width: 8),
+                                        Text('Borrar rostro'),
+                                      ],
+                                    ),
+                                  ),
                                 PopupMenuItem(
                                   value: 'edit',
                                   child: Row(
@@ -247,6 +277,39 @@ class _TrabajadoresScreenState extends State<TrabajadoresScreen> {
                       },
                     ),
     );
+  }
+
+  Future<void> _registrarRostro(Trabajador trabajador) async {
+    final ok = await RegistroRostroScreen.abrir(
+      context,
+      trabajadorId: trabajador.id,
+      nombre: trabajador.nombre,
+      yaRegistrado: trabajador.rostroRegistrado,
+    );
+    if (ok) _loadTrabajadores();
+  }
+
+  Future<void> _borrarRostro(Trabajador trabajador) async {
+    final confirmar = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text('Borrar rostro'),
+        content: Text('Se eliminan la huella facial y la foto de referencia de ${trabajador.nombre}. '
+            'No podrá marcar con el rostro hasta registrarlo de nuevo.'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: Text('Cancelar')),
+          FilledButton(onPressed: () => Navigator.pop(ctx, true), child: Text('Borrar')),
+        ],
+      ),
+    );
+    if (confirmar != true) return;
+    try {
+      await ApiService.borrarRostro(trabajador.id);
+      _loadTrabajadores();
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$e'), backgroundColor: Colors.red));
+    }
   }
 
   void _editTrabajador(Trabajador trabajador) async {

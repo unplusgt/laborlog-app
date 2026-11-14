@@ -7,6 +7,7 @@ class Trabajador {
   final DateTime? fechaRegistro;
   final String? fotoRegistroPath;
   final bool activo;
+  final bool rostroRegistrado;
 
   Trabajador({
     required this.id,
@@ -17,6 +18,7 @@ class Trabajador {
     this.fechaRegistro,
     this.fotoRegistroPath,
     this.activo = true,
+    this.rostroRegistrado = false,
   });
 
   factory Trabajador.fromJson(Map<String, dynamic> json) {
@@ -31,6 +33,7 @@ class Trabajador {
           : null,
       fotoRegistroPath: json['foto_registro_path'],
       activo: json['activo'] ?? true,
+      rostroRegistrado: json['rostro_registrado'] ?? false,
     );
   }
 

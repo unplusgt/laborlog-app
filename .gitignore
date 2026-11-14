@@ -31,3 +31,7 @@ doc/api/
 *.keystore
 *.jks
 key.properties
+
+# Modelo facial: lo descarga tool/descargar_modelo.sh (no va en git)
+assets/modelos/*.onnx
+assets/modelos/*.tmp

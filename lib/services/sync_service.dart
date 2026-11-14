@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:typed_data';
 
 import 'package:http/http.dart' as http;
 
@@ -47,12 +48,14 @@ class KioscoService {
   static const claveCola = 'kiosco_cola';
   static const claveUltimos = 'kiosco_ultimos';
 
-  static const int tamanoLote = 100;
+  /// Cada marcaje facial lleva su foto (~20 KB): lotes pequeños.
+  static const int tamanoLote = 20;
   static const Duration timeout = Duration(seconds: 20);
   static const Duration refrescoConfig = Duration(minutes: 15);
 
   final AlmacenClaveValor _almacen;
   final AlmacenClaveValor _seguro;
+  final AlmacenFotos _fotos;
   final http.Client _http;
   final DateTime Function() _reloj;
   final String Function() _apiUrl;
@@ -60,11 +63,13 @@ class KioscoService {
   KioscoService({
     required AlmacenClaveValor almacen,
     required AlmacenClaveValor almacenSeguro,
+    AlmacenFotos? fotos,
     http.Client? client,
     DateTime Function()? reloj,
     String Function()? apiUrl,
   })  : _almacen = almacen,
         _seguro = almacenSeguro,
+        _fotos = fotos ?? AlmacenFotosMemoria(),
         _http = client ?? http.Client(),
         _reloj = reloj ?? DateTime.now,
         _apiUrl = apiUrl ?? (() => AppConfig.apiUrl);
@@ -75,6 +80,7 @@ class KioscoService {
   static KioscoService get instancia => _instancia ??= KioscoService(
         almacen: AlmacenPreferencias(),
         almacenSeguro: AlmacenSeguro(),
+        fotos: AlmacenFotosArchivos(),
       );
 
   // ---------------------------------------------------------------- exclusión
@@ -113,7 +119,13 @@ class KioscoService {
     await _almacen.borrar(claveConfig);
     await _almacen.borrar(claveCola);
     await _almacen.borrar(claveUltimos);
+    await _fotos.borrarTodas();
   }
+
+  /// Guarda la foto de un marcaje antes de encolarlo; devuelve su referencia.
+  Future<String> guardarFoto(String marcajeId, Uint8List jpeg) => _fotos.guardar(marcajeId, jpeg);
+
+  Future<Uint8List?> leerFoto(String ref) => _fotos.leer(ref);
 
   // ------------------------------------------------------------ configuración
   Future<KioscoConfig?> configGuardada() async {
@@ -184,6 +196,9 @@ class KioscoService {
   /// Quita un marcaje rechazado de la lista (el supervisor ya lo revisó).
   Future<void> descartar(String id) => _exclusivo(() async {
         final actual = await cola();
+        for (final m in actual.where((m) => m.id == id && m.rechazado)) {
+          if (m.fotoRef != null) await _fotos.borrar(m.fotoRef!);
+        }
         actual.removeWhere((m) => m.id == id && m.rechazado);
         await _guardarCola(actual);
       });
@@ -238,6 +253,16 @@ class KioscoService {
       final lote = (await cola()).where((m) => !m.rechazado).take(tamanoLote).toList();
       if (lote.isEmpty) break;
 
+      final items = <Map<String, dynamic>>[];
+      for (final m in lote) {
+        final item = m.toApi();
+        if (m.fotoRef != null) {
+          final foto = await _fotos.leer(m.fotoRef!);
+          if (foto != null) item['foto_jpeg_b64'] = base64Encode(foto);
+        }
+        items.add(item);
+      }
+
       final http.Response r;
       try {
         r = await _enviar(() => _http.post(
@@ -245,7 +270,7 @@ class KioscoService {
               headers: {'Content-Type': 'application/json', 'X-Device-Token': token},
               body: json.encode({
                 'enviado_en': _reloj().toUtc().toIso8601String(),
-                'marcajes': lote.map((m) => m.toApi()).toList(),
+                'marcajes': items,
               }),
             ));
       } on SinConexion {
@@ -269,6 +294,7 @@ class KioscoService {
           } else if (res['estado'] == 'creado' || res['estado'] == 'duplicado') {
             aceptados++;
             n++;
+            if (m.fotoRef != null) await _fotos.borrar(m.fotoRef!);
           } else {
             final rechazado = m.rechazar(res['error'] ?? 'Rechazado por el servidor');
             rechazadosAhora.add(rechazado);

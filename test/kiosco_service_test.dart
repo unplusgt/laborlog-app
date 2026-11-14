@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:typed_data';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
@@ -83,11 +84,13 @@ class _ServidorFalso {
 void main() {
   late AlmacenMemoria almacen;
   late AlmacenMemoria seguro;
+  late AlmacenFotosMemoria fotos;
   late _ServidorFalso servidor;
 
   KioscoService crear() => KioscoService(
         almacen: almacen,
         almacenSeguro: seguro,
+        fotos: fotos,
         client: servidor.cliente,
         apiUrl: () => _url,
       );
@@ -95,6 +98,7 @@ void main() {
   setUp(() {
     almacen = AlmacenMemoria();
     seguro = AlmacenMemoria();
+    fotos = AlmacenFotosMemoria();
     servidor = _ServidorFalso();
   });
 
@@ -198,15 +202,15 @@ void main() {
       expect(await svc.cantidadPendientes(), 1);
     });
 
-    test('lotes de máximo 100 marcajes', () async {
+    test('lotes de máximo 20 marcajes (llevan foto)', () async {
       final svc = crear();
       await svc.activar(_token);
-      for (var i = 0; i < 230; i++) {
+      for (var i = 0; i < 45; i++) {
         await svc.encolar(_marcaje('m$i'));
       }
       final r = await svc.sincronizar();
-      expect(r.aceptados, 230);
-      expect(servidor.lotes.map((l) => (l['marcajes'] as List).length), [100, 100, 30]);
+      expect(r.aceptados, 45);
+      expect(servidor.lotes.map((l) => (l['marcajes'] as List).length), [20, 20, 5]);
     });
 
     test('encolar durante una sincronización no pierde el marcaje', () async {
@@ -230,6 +234,70 @@ void main() {
       expect(await svc.estaActivado(), isFalse);
       expect(await svc.configGuardada(), isNull);
       expect(await svc.cola(), isEmpty);
+    });
+  });
+
+  group('marcaje facial', () {
+    MarcajePendiente facial(String id, String fotoRef) => MarcajePendiente(
+          id: id,
+          trabajadorId: 't1',
+          trabajadorNombre: 'Juan Perez',
+          obraId: 1,
+          tipo: 'entrada',
+          capturadoEn: DateTime.now().toUtc(),
+          lat: 14.538364,
+          lng: -90.478339,
+          metodo: 'rostro',
+          similitud: 0.8123456,
+          pruebaVida: 'parpadeo',
+          fotoRef: fotoRef,
+        );
+
+    test('envía la foto, el método y la similitud; borra la foto al aceptarse', () async {
+      final svc = crear();
+      await svc.activar(_token);
+      final ref = await svc.guardarFoto('m1', Uint8List.fromList([0xff, 0xd8, 1, 2, 3]));
+      await svc.encolar(facial('m1', ref));
+      await svc.sincronizar();
+      final enviado = (servidor.lotes.single['marcajes'] as List).single as Map;
+      expect(enviado['metodo'], 'rostro');
+      expect(enviado['similitud'], 0.8123);
+      expect(enviado['prueba_vida'], 'parpadeo');
+      expect(base64Decode(enviado['foto_jpeg_b64']), [0xff, 0xd8, 1, 2, 3]);
+      expect(fotos.fotos, isEmpty);
+    });
+
+    test('la foto de un rechazado se conserva hasta descartarlo', () async {
+      final svc = crear();
+      await svc.activar(_token);
+      servidor.rechazar.add('m1');
+      final ref = await svc.guardarFoto('m1', Uint8List.fromList([0xff, 0xd8]));
+      await svc.encolar(facial('m1', ref));
+      await svc.sincronizar();
+      expect(fotos.fotos, isNotEmpty);
+      final rechazado = (await svc.rechazados()).single;
+      expect(rechazado.metodo, 'rostro');
+      expect(rechazado.fotoRef, ref);
+      await svc.descartar('m1');
+      expect(fotos.fotos, isEmpty);
+    });
+
+    test('marcaje manual no manda campos faciales', () async {
+      final svc = crear();
+      await svc.activar(_token);
+      await svc.encolar(_marcaje('m1'));
+      await svc.sincronizar();
+      final enviado = (servidor.lotes.single['marcajes'] as List).single as Map;
+      expect(enviado['metodo'], 'manual');
+      expect(enviado.containsKey('foto_jpeg_b64'), isFalse);
+      expect(enviado.containsKey('similitud'), isFalse);
+    });
+
+    test('la huella del trabajador llega en la configuración', () async {
+      servidor.config = _configJson()..['trabajadores'][0]['huella_b64'] = 'AAAA';
+      final config = await crear().activar(_token);
+      expect(config.trabajadores.single.tieneRostro, isTrue);
+      expect(config.trabajadores.single.huellaB64, 'AAAA');
     });
   });
 

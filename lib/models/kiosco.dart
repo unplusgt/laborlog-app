@@ -83,13 +83,19 @@ class KioscoTrabajador {
   final String? ultimoTipo;
   final DateTime? ultimoMarcaje;
 
+  /// Huella facial (base64) para reconocerlo sin conexión; null si no tiene rostro registrado.
+  final String? huellaB64;
+
   KioscoTrabajador({
     required this.id,
     required this.nombre,
     this.codigoEmpresa,
     this.ultimoTipo,
     this.ultimoMarcaje,
+    this.huellaB64,
   });
+
+  bool get tieneRostro => huellaB64 != null;
 
   factory KioscoTrabajador.fromJson(Map<String, dynamic> json) => KioscoTrabajador(
         id: json['id'],
@@ -99,6 +105,7 @@ class KioscoTrabajador {
         ultimoMarcaje: json['ultimo_marcaje'] != null
             ? DateTime.parse(json['ultimo_marcaje'])
             : null,
+        huellaB64: json['huella_b64'],
       );
 
   Map<String, dynamic> toJson() => {
@@ -107,6 +114,7 @@ class KioscoTrabajador {
         'codigo_empresa': codigoEmpresa,
         'ultimo_tipo': ultimoTipo,
         'ultimo_marcaje': ultimoMarcaje?.toUtc().toIso8601String(),
+        'huella_b64': huellaB64,
       };
 }
 
@@ -123,6 +131,14 @@ class MarcajePendiente {
   final double? precisionMetros;
   final bool ubicacionSimulada;
 
+  /// rostro (reconocido por la cámara) | manual (eligió su nombre)
+  final String metodo;
+  final double? similitud;
+  final String? pruebaVida;
+
+  /// Referencia a la foto guardada en el teléfono (ver AlmacenFotos)
+  final String? fotoRef;
+
   /// pendiente | rechazado
   final String estado;
   final String? error;
@@ -138,6 +154,10 @@ class MarcajePendiente {
     required this.lng,
     this.precisionMetros,
     this.ubicacionSimulada = false,
+    this.metodo = 'manual',
+    this.similitud,
+    this.pruebaVida,
+    this.fotoRef,
     this.estado = 'pendiente',
     this.error,
   });
@@ -155,11 +175,15 @@ class MarcajePendiente {
         lng: lng,
         precisionMetros: precisionMetros,
         ubicacionSimulada: ubicacionSimulada,
+        metodo: metodo,
+        similitud: similitud,
+        pruebaVida: pruebaVida,
+        fotoRef: fotoRef,
         estado: 'rechazado',
         error: motivo,
       );
 
-  /// Formato que espera POST /marcajes/lote.
+  /// Formato que espera POST /marcajes/lote (la foto se agrega al enviar).
   Map<String, dynamic> toApi() => {
         'id': id,
         'trabajador_id': trabajadorId,
@@ -170,11 +194,15 @@ class MarcajePendiente {
         'lng': lng.toStringAsFixed(6),
         if (precisionMetros != null) 'precision_metros': precisionMetros,
         'ubicacion_simulada': ubicacionSimulada,
+        'metodo': metodo,
+        if (similitud != null) 'similitud': double.parse(similitud!.toStringAsFixed(4)),
+        if (pruebaVida != null) 'prueba_vida': pruebaVida,
       };
 
   Map<String, dynamic> toJson() => {
         ...toApi(),
         'trabajador_nombre': trabajadorNombre,
+        'foto_ref': fotoRef,
         'estado': estado,
         'error': error,
       };
@@ -190,6 +218,10 @@ class MarcajePendiente {
         lng: double.parse(json['lng']),
         precisionMetros: (json['precision_metros'] as num?)?.toDouble(),
         ubicacionSimulada: json['ubicacion_simulada'] ?? false,
+        metodo: json['metodo'] ?? 'manual',
+        similitud: (json['similitud'] as num?)?.toDouble(),
+        pruebaVida: json['prueba_vida'],
+        fotoRef: json['foto_ref'],
         estado: json['estado'] ?? 'pendiente',
         error: json['error'],
       );

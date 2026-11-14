@@ -42,6 +42,9 @@ jobs:
       - name: Dependencias
         run: flutter pub get
 
+      - name: Modelo de reconocimiento facial (verificado por SHA-256)
+        run: bash tool/descargar_modelo.sh
+
       - name: Pruebas
         run: flutter test
 

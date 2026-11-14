@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../services/auth_service.dart';
+import '../utils/app_config.dart';
 import '../widgets/custom_button.dart';
 import '../widgets/custom_textfield.dart';
 
@@ -11,6 +12,7 @@ class LoginScreen extends StatefulWidget {
 class _LoginScreenState extends State<LoginScreen> {
   final TextEditingController _emailController = TextEditingController();
   final TextEditingController _passwordController = TextEditingController();
+  final TextEditingController _servidorController = TextEditingController(text: AppConfig.apiUrl);
   bool _loading = false;
   String? _error;
 
@@ -19,6 +21,7 @@ class _LoginScreenState extends State<LoginScreen> {
       _loading = true;
       _error = null;
     });
+    await AppConfig.guardarApiUrl(_servidorController.text);
     final success = await AuthService().login(
       _emailController.text.trim(),
       _passwordController.text.trim(),
@@ -30,7 +33,7 @@ class _LoginScreenState extends State<LoginScreen> {
       Navigator.pushReplacementNamed(context, '/home');
     } else {
       setState(() {
-        _error = 'Credenciales incorrectas o error de conexión';
+        _error = 'Credenciales incorrectas o no hay conexión con ${AppConfig.apiUrl}';
       });
     }
   }
@@ -44,6 +47,16 @@ class _LoginScreenState extends State<LoginScreen> {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
+            TextField(
+              controller: _servidorController,
+              keyboardType: TextInputType.url,
+              autocorrect: false,
+              decoration: InputDecoration(
+                labelText: 'Servidor',
+                hintText: 'http://192.168.0.12:8000',
+              ),
+            ),
+            SizedBox(height: 16),
             CustomTextField(label: 'Email', controller: _emailController),
             SizedBox(height: 16),
             CustomTextField(label: 'Contraseña', controller: _passwordController, obscureText: true),

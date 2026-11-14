@@ -49,6 +49,11 @@ dependencies:
   flutter_secure_storage: ^11.2.0
   # Id de cada marcaje generado en el teléfono (evita duplicados al reenviar)
   uuid: ^4.6.0
+  camera: ^0.12.0+2
+  google_mlkit_face_detection: ^0.14.0
+  flutter_onnxruntime: ^1.9.0
+  image: ^4.13.0
+  path_provider: ^2.1.6
 
 dev_dependencies:
   flutter_test:
@@ -71,6 +76,10 @@ flutter:
   # included with your application, so that you can use the icons in
   # the material Icons class.
   uses-material-design: true
+
+  assets:
+    # Modelo de reconocimiento facial SFace (no va en git): tool/descargar_modelo.sh
+    - assets/modelos/
 
   # To add assets to your application, add an assets section, like this:
   # assets:
