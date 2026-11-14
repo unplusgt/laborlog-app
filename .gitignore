@@ -4,8 +4,7 @@
 .dart_tool/
 .packages
 build/
-# If you're building an application, you may want to check-in your pubspec.lock
-pubspec.lock
+# pubspec.lock SÍ se versiona: GitHub Actions compila con las mismas versiones que se probaron
 
 # Directory created by dartdoc
 # If you don't generate documentation locally you can remove this line.
@@ -27,3 +26,8 @@ doc/api/
 
 .flutter-plugins
 .flutter-plugins-dependencies
+
+# Llaves de firma: nunca en el repo (es público)
+*.keystore
+*.jks
+key.properties

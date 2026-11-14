@@ -1,0 +1,85 @@
+# Compila el APK de Android en GitHub (no hace falta Android Studio en la PC).
+#
+# - Cada push a develop: corre las pruebas, compila el APK (debug) y lo publica en
+#   Releases con un enlace fijo para descargarlo desde el celular:
+#   https://github.com/unplusgt/laborlog-app/releases/download/kiosco-develop/laborlog-kiosco-debug.apk
+# - También se puede lanzar a mano: Actions > "APK Android" > Run workflow.
+#
+# Firma: usa el secreto ANDROID_DEBUG_KEYSTORE_B64 para que todas las versiones
+# tengan la misma firma y el celular acepte las actualizaciones sin desinstalar.
+name: APK Android
+
+on:
+  push:
+    branches: [develop]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: apk-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  apk:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          flutter-version: "3.38.2"
+          cache: true
+
+      - name: Dependencias
+        run: flutter pub get
+
+      - name: Pruebas
+        run: flutter test
+
+      - name: Llave de firma fija
+        env:
+          KEYSTORE_B64: ${{ secrets.ANDROID_DEBUG_KEYSTORE_B64 }}
+        run: |
+          if [ -n "$KEYSTORE_B64" ]; then
+            mkdir -p ~/.android
+            echo "$KEYSTORE_B64" | base64 -d > ~/.android/debug.keystore
+            echo "Usando la llave fija del secreto ANDROID_DEBUG_KEYSTORE_B64"
+          else
+            echo "::warning::Falta el secreto ANDROID_DEBUG_KEYSTORE_B64: este APK tiene una firma temporal y para instalar el siguiente habrá que desinstalar la app."
+          fi
+
+      - name: Compilar APK (debug)
+        # debug permite http:// para probar contra una PC en la red local
+        run: flutter build apk --debug --target-platform android-arm,android-arm64
+
+      - name: Renombrar
+        run: cp build/app/outputs/flutter-apk/app-debug.apk laborlog-kiosco-debug.apk
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: laborlog-kiosco-debug
+          path: laborlog-kiosco-debug.apk
+          retention-days: 14
+
+      - name: Publicar en Releases (enlace fijo)
+        if: github.ref == 'refs/heads/develop'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release delete kiosco-develop --cleanup-tag --yes || true
+          gh release create kiosco-develop laborlog-kiosco-debug.apk \
+            --prerelease \
+            --target "$GITHUB_SHA" \
+            --title "Kiosco de prueba (develop ${GITHUB_SHA::7})" \
+            --notes "APK de PRUEBA (debug) compilado automáticamente desde develop (${GITHUB_SHA::7}).
+          Instalar en Android: descargar laborlog-kiosco-debug.apk y permitir 'Instalar apps desconocidas'.
+          Al activar el kiosco se ingresa la dirección del servidor y el token del dispositivo."
