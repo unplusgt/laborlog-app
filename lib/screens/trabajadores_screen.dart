@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
+import '../models/obra.dart';
 import '../models/trabajador.dart';
 import '../services/api_service.dart';
+import '../services/auth_service.dart';
 import 'registro_rostro_screen.dart';
 
 class TrabajadoresScreen extends StatefulWidget {
@@ -10,7 +12,28 @@ class TrabajadoresScreen extends StatefulWidget {
 
 class _TrabajadoresScreenState extends State<TrabajadoresScreen> {
   List<Trabajador> _trabajadores = [];
+  List<Obra> _obras = [];
   bool _loading = true;
+
+  /// Solo superadmin y jefe agregan, editan o dan de baja; el supervisor consulta y
+  /// registra rostros de sus trabajadores.
+  bool get _gestiona => AuthService.puedeGestionar;
+
+  String _nombreObra(int? id) {
+    if (id == null) return 'Sin obra asignada';
+    return _obras.where((o) => o.id == id).map((o) => o.nombre).firstOrNull ?? 'Obra #$id';
+  }
+
+  Widget _selectorObra(int? valor, ValueChanged<int?> onChanged) => DropdownButtonFormField<int?>(
+        initialValue: _obras.any((o) => o.id == valor) ? valor : null,
+        isExpanded: true,
+        decoration: InputDecoration(labelText: 'Obra asignada'),
+        items: [
+          DropdownMenuItem<int?>(value: null, child: Text('Sin obra asignada')),
+          ..._obras.map((o) => DropdownMenuItem<int?>(value: o.id, child: Text(o.nombre))),
+        ],
+        onChanged: onChanged,
+      );
   String? _error;
 
   @override
@@ -26,8 +49,10 @@ class _TrabajadoresScreenState extends State<TrabajadoresScreen> {
         _error = null;
       });
       
-      final trabajadores = await ApiService.getTrabajadores();
+      final r = await Future.wait([ApiService.getTrabajadores(), ApiService.getObras()]);
+      final trabajadores = r[0] as List<Trabajador>;
       setState(() {
+        _obras = r[1] as List<Obra>;
         _trabajadores = trabajadores;
         _loading = false;
       });
@@ -43,6 +68,7 @@ class _TrabajadoresScreenState extends State<TrabajadoresScreen> {
     final nombreController = TextEditingController();
     final dniController = TextEditingController();
     final telefonoController = TextEditingController();
+    int? obraSel;
 
     showDialog(
       context: context,
@@ -76,6 +102,8 @@ class _TrabajadoresScreenState extends State<TrabajadoresScreen> {
                 ),
                 keyboardType: TextInputType.phone,
               ),
+              SizedBox(height: 16),
+              _selectorObra(null, (v) => obraSel = v),
             ],
           ),
         ),
@@ -95,6 +123,7 @@ class _TrabajadoresScreenState extends State<TrabajadoresScreen> {
                   dni: dniController.text.trim(),
                   telefono: telefonoController.text.trim(),
                   activo: true,
+                  obraId: obraSel,
                 ));
                 
                 Navigator.pop(context);
@@ -124,11 +153,12 @@ class _TrabajadoresScreenState extends State<TrabajadoresScreen> {
         backgroundColor: Colors.orange,
         foregroundColor: Colors.white,
         actions: [
-          IconButton(
-            icon: Icon(Icons.add),
-            onPressed: _showAddDialog,
-            tooltip: 'Agregar trabajador',
-          ),
+          if (_gestiona)
+            IconButton(
+              icon: Icon(Icons.add),
+              onPressed: _showAddDialog,
+              tooltip: 'Agregar trabajador',
+            ),
           IconButton(
             icon: Icon(Icons.refresh),
             onPressed: _loadTrabajadores,
@@ -166,10 +196,11 @@ class _TrabajadoresScreenState extends State<TrabajadoresScreen> {
                             style: TextStyle(fontSize: 18, color: Colors.grey),
                           ),
                           SizedBox(height: 16),
-                          ElevatedButton(
-                            onPressed: _showAddDialog,
-                            child: Text('Agregar primer trabajador'),
-                          ),
+                          if (_gestiona)
+                            ElevatedButton(
+                              onPressed: _showAddDialog,
+                              child: Text('Agregar primer trabajador'),
+                            ),
                         ],
                       ),
                     )
@@ -195,6 +226,7 @@ class _TrabajadoresScreenState extends State<TrabajadoresScreen> {
                             subtitle: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
+                                Text('🏗️ ${_nombreObra(trabajador.obraId)}'),
                                 if (trabajador.dni?.isNotEmpty == true)
                                   Text('📄 DNI: ${trabajador.dni}'),
                                 if (trabajador.telefono?.isNotEmpty == true)
@@ -236,7 +268,7 @@ class _TrabajadoresScreenState extends State<TrabajadoresScreen> {
                                     ],
                                   ),
                                 ),
-                                if (trabajador.rostroRegistrado)
+                                if (trabajador.rostroRegistrado && _gestiona)
                                   PopupMenuItem(
                                     value: 'borrar_rostro',
                                     child: Row(
@@ -247,6 +279,7 @@ class _TrabajadoresScreenState extends State<TrabajadoresScreen> {
                                       ],
                                     ),
                                   ),
+                                if (_gestiona)
                                 PopupMenuItem(
                                   value: 'edit',
                                   child: Row(
@@ -257,6 +290,7 @@ class _TrabajadoresScreenState extends State<TrabajadoresScreen> {
                                     ],
                                   ),
                                 ),
+                                if (_gestiona)
                                 PopupMenuItem(
                                   value: 'toggle',
                                   child: Row(
@@ -317,6 +351,7 @@ class _TrabajadoresScreenState extends State<TrabajadoresScreen> {
     final dniController = TextEditingController(text: trabajador.dni);
     final telefonoController = TextEditingController(text: trabajador.telefono);
     final codigoController = TextEditingController(text: trabajador.codigoEmpresa);
+    int? obraSel = trabajador.obraId;
 
     showDialog(
       context: context,
@@ -342,6 +377,8 @@ class _TrabajadoresScreenState extends State<TrabajadoresScreen> {
                 controller: codigoController,
                 decoration: InputDecoration(labelText: 'Código Empresa'),
               ),
+              SizedBox(height: 12),
+              _selectorObra(trabajador.obraId, (v) => obraSel = v),
             ],
           ),
         ),
@@ -369,6 +406,7 @@ class _TrabajadoresScreenState extends State<TrabajadoresScreen> {
                   fechaRegistro: trabajador.fechaRegistro,
                   fotoRegistroPath: trabajador.fotoRegistroPath,
                   activo: trabajador.activo,
+                  obraId: obraSel,
                 );
 
                 await ApiService.updateTrabajador(trabajador.id, trabajadorActualizado);
@@ -402,6 +440,7 @@ class _TrabajadoresScreenState extends State<TrabajadoresScreen> {
         fechaRegistro: trabajador.fechaRegistro,
         fotoRegistroPath: trabajador.fotoRegistroPath,
         activo: !trabajador.activo,
+        obraId: trabajador.obraId,
       );
 
       await ApiService.updateTrabajador(trabajador.id, trabajadorActualizado);

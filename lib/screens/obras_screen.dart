@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../models/obra.dart';
 import '../services/api_service.dart';
+import '../services/auth_service.dart';
 import '../services/location_service.dart';
 
 class ObrasScreen extends StatefulWidget {
@@ -232,11 +233,12 @@ class _ObrasScreenState extends State<ObrasScreen> {
         backgroundColor: Colors.purple,
         foregroundColor: Colors.white,
         actions: [
-          IconButton(
-            icon: Icon(Icons.add),
-            onPressed: _showAddDialog,
-            tooltip: 'Agregar obra',
-          ),
+          if (AuthService.puedeGestionar)
+            IconButton(
+              icon: Icon(Icons.add),
+              onPressed: _showAddDialog,
+              tooltip: 'Agregar obra',
+            ),
           IconButton(
             icon: Icon(Icons.refresh),
             onPressed: _loadObras,
@@ -274,10 +276,11 @@ class _ObrasScreenState extends State<ObrasScreen> {
                             style: TextStyle(fontSize: 18, color: Colors.grey),
                           ),
                           SizedBox(height: 16),
-                          ElevatedButton(
-                            onPressed: _showAddDialog,
-                            child: Text('Agregar primera obra'),
-                          ),
+                          if (AuthService.puedeGestionar)
+                            ElevatedButton(
+                              onPressed: _showAddDialog,
+                              child: Text('Agregar primera obra'),
+                            ),
                         ],
                       ),
                     )
@@ -344,7 +347,7 @@ class _ObrasScreenState extends State<ObrasScreen> {
                               ],
                             ),
                             isThreeLine: true,
-                            trailing: PopupMenuButton(
+                            trailing: !AuthService.puedeGestionar ? null : PopupMenuButton(
                               onSelected: (value) {
                                 if (value == 'edit') {
                                   _editObra(obra);

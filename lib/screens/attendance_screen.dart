@@ -4,7 +4,6 @@ import '../services/location_service.dart';
 import '../models/trabajador.dart';
 import '../models/obra.dart';
 import '../models/attendance.dart';
-import '../models/dispositivo.dart';
 import 'package:uuid/uuid.dart';
 import 'dart:math';
 
@@ -18,7 +17,6 @@ class AttendanceScreen extends StatefulWidget {
 class _AttendanceScreenState extends State<AttendanceScreen> {
   List<Trabajador> _trabajadores = [];
   List<Obra> _obras = [];
-  List<Dispositivo> _dispositivos = [];
   
   // Selección múltiple de trabajadores
   List<Trabajador> _trabajadoresEnCola = [];
@@ -70,14 +68,12 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
       final futures = await Future.wait([
         ApiService.getTrabajadores(),
         ApiService.getObras(),
-        ApiService.getDispositivos(),
       ]);
-      
+
       setState(() {
         _trabajadores = futures[0] as List<Trabajador>;
         _trabajadoresFiltrados = _trabajadores; // Inicializar lista filtrada
         _obras = futures[1] as List<Obra>;
-        _dispositivos = futures[2] as List<Dispositivo>;
         _dataLoaded = true;
       });
     } catch (e) {
@@ -321,10 +317,6 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
       return;
     }
 
-    if (_dispositivos.isEmpty) {
-      _showSnackBar('No hay dispositivos disponibles');
-      return;
-    }
 
     // Validar que tenga ubicación actual
     if (_currentLocation == null) {
@@ -365,7 +357,7 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
         obraId: _selectedObra!.id,
         tipo: _tipoMarcaje,
         timestampLocal: DateTime.now(),
-        origen: _dispositivos.first.id,
+        origen: '', // marca un usuario: el servidor guarda quién lo registró
         lat: _currentLocation!['latitude']!.toStringAsFixed(6),
         lng: _currentLocation!['longitude']!.toStringAsFixed(6),
         precisionMetros: _ubicacion?.precisionMetros,

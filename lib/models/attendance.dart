@@ -62,7 +62,7 @@ class Marcaje {
       'obra_id': obraId,
       'tipo': tipo,
       'timestamp_local': timestampLocal.toIso8601String(),
-      'origen': origen,
+      if (origen.isNotEmpty) 'origen': origen,
       'lat': lat,
       'lng': lng,
       'foto_path': fotoPath,

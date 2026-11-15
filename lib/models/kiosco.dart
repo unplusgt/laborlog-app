@@ -4,6 +4,7 @@ class KioscoConfig {
   final String dispositivoId;
   final String? dispositivoNombre;
   final String empresaNombre;
+  final String? empresaCodigo;
   final String zonaHoraria;
   final KioscoObra? obra;
   final List<KioscoTrabajador> trabajadores;
@@ -13,6 +14,7 @@ class KioscoConfig {
     required this.dispositivoId,
     this.dispositivoNombre,
     required this.empresaNombre,
+    this.empresaCodigo,
     required this.zonaHoraria,
     this.obra,
     required this.trabajadores,
@@ -24,6 +26,7 @@ class KioscoConfig {
       dispositivoId: json['dispositivo_id'],
       dispositivoNombre: json['dispositivo_nombre'],
       empresaNombre: json['empresa_nombre'] ?? '',
+      empresaCodigo: json['empresa_codigo'],
       zonaHoraria: json['zona_horaria'] ?? '',
       obra: json['obra'] != null ? KioscoObra.fromJson(json['obra']) : null,
       trabajadores: ((json['trabajadores'] as List?) ?? [])
@@ -39,6 +42,7 @@ class KioscoConfig {
         'dispositivo_id': dispositivoId,
         'dispositivo_nombre': dispositivoNombre,
         'empresa_nombre': empresaNombre,
+        'empresa_codigo': empresaCodigo,
         'zona_horaria': zonaHoraria,
         'obra': obra?.toJson(),
         'trabajadores': trabajadores.map((t) => t.toJson()).toList(),

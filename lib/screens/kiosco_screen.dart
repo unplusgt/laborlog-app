@@ -386,8 +386,8 @@ class _KioscoScreenState extends State<KioscoScreen> with WidgetsBindingObserver
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Text(soloAdmin ? 'Requiere un usuario administrador.' : 'Requiere un supervisor o administrador.'),
-            TextField(controller: email, keyboardType: TextInputType.emailAddress, decoration: const InputDecoration(labelText: 'Email')),
+            Text(soloAdmin ? 'Requiere un jefe o super admin de ${_config?.empresaNombre ?? 'la empresa'}.' : 'Requiere un supervisor, jefe o super admin.'),
+            TextField(controller: email, keyboardType: TextInputType.emailAddress, decoration: const InputDecoration(labelText: 'Usuario o correo')),
             TextField(controller: password, obscureText: true, decoration: const InputDecoration(labelText: 'Contraseña')),
           ],
         ),
@@ -399,9 +399,9 @@ class _KioscoScreenState extends State<KioscoScreen> with WidgetsBindingObserver
     );
     if (ok != true) return false;
     final auth = AuthService();
-    final entro = await auth.login(email.text.trim(), password.text);
+    final entro = await auth.login(_config?.empresaCodigo ?? '', email.text.trim(), password.text);
     final rol = AuthService.currentUser?.rol;
-    final permitido = soloAdmin ? AuthService.isAdmin : const ['supervisor', 'admin', 'superadmin'].contains(rol);
+    final permitido = soloAdmin ? AuthService.puedeGestionar : const ['supervisor', 'jefe', 'superadmin'].contains(rol);
     if (!entro || !permitido) {
       await auth.logout();
       _error(entro ? 'Tu usuario no tiene permiso para esto.' : 'Credenciales incorrectas o sin conexión.');
@@ -435,7 +435,7 @@ class _KioscoScreenState extends State<KioscoScreen> with WidgetsBindingObserver
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Text('Requiere un usuario administrador.'),
+            const Text('Requiere un jefe o super admin de la empresa.'),
             if (_pendientes > 0)
               Padding(
                 padding: const EdgeInsets.only(top: 8),
@@ -444,7 +444,7 @@ class _KioscoScreenState extends State<KioscoScreen> with WidgetsBindingObserver
                   style: const TextStyle(color: Colors.red),
                 ),
               ),
-            TextField(controller: email, decoration: const InputDecoration(labelText: 'Email')),
+            TextField(controller: email, keyboardType: TextInputType.emailAddress, decoration: const InputDecoration(labelText: 'Usuario o correo')),
             TextField(
               controller: password,
               obscureText: true,
@@ -460,10 +460,10 @@ class _KioscoScreenState extends State<KioscoScreen> with WidgetsBindingObserver
     );
     if (confirmado != true) return;
     final auth = AuthService();
-    final ok = await auth.login(email.text.trim(), password.text);
-    if (!ok || !AuthService.isAdmin) {
+    final ok = await auth.login(_config?.empresaCodigo ?? '', email.text.trim(), password.text);
+    if (!ok || !AuthService.puedeGestionar) {
       await auth.logout();
-      _error(ok ? 'Solo un administrador puede salir del modo kiosco.' : 'Credenciales incorrectas o sin conexión.');
+      _error(ok ? 'Solo un jefe o super admin puede salir del modo kiosco.' : 'Credenciales incorrectas o sin conexión.');
       return;
     }
     await auth.logout();

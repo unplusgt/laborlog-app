@@ -9,6 +9,8 @@ import 'screens/obras_screen.dart';
 import 'screens/dispositivos_screen.dart';
 import 'screens/kiosco_screen.dart';
 import 'screens/kiosco_activar_screen.dart';
+import 'screens/plataforma_screen.dart';
+import 'screens/usuarios_screen.dart';
 import 'services/sync_service.dart';
 import 'utils/app_config.dart';
 
@@ -40,7 +42,9 @@ class LaborLogApp extends StatelessWidget {
       ),
       initialRoute: rutaInicial,
       routes: {
-        '/login': (context) => LoginScreen(),
+        '/login': (context) => const LoginScreen(),
+        '/usuarios': (context) => const UsuariosScreen(),
+        '/plataforma': (context) => const PlataformaScreen(),
         '/home': (context) => HomeScreen(),
         '/attendance': (context) => AttendanceScreen(),
         '/history': (context) => HistoryScreen(),

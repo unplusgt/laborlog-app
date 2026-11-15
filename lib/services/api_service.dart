@@ -5,6 +5,7 @@ import '../models/trabajador.dart';
 import '../models/obra.dart';
 import '../models/attendance.dart';
 import '../models/dispositivo.dart';
+import '../models/user.dart';
 import 'auth_service.dart';
 
 class ApiException implements Exception {
@@ -216,6 +217,59 @@ class ApiService {
     );
     _checkResponse(response);
     return Dispositivo.fromJson(json.decode(utf8.decode(response.bodyBytes)));
+  }
+
+  // =================================================================
+  // USUARIOS (superadmin y jefe)
+  // =================================================================
+
+  static Future<List<UsuarioAdmin>> getUsuarios() async {
+    final r = await http.get(Uri.parse('$baseUrl/usuarios_admin'), headers: AuthService.authHeaders);
+    _checkResponse(r);
+    return (json.decode(utf8.decode(r.bodyBytes)) as List).map((u) => UsuarioAdmin.fromJson(u)).toList();
+  }
+
+  static Future<UsuarioAdmin> crearUsuario(Map<String, dynamic> datos) async {
+    final r = await http.post(Uri.parse('$baseUrl/usuarios_admin'),
+        headers: AuthService.authHeaders, body: json.encode(datos));
+    _checkResponse(r);
+    return UsuarioAdmin.fromJson(json.decode(utf8.decode(r.bodyBytes)));
+  }
+
+  static Future<UsuarioAdmin> actualizarUsuario(String id, Map<String, dynamic> cambios) async {
+    final r = await http.put(Uri.parse('$baseUrl/usuarios_admin/$id'),
+        headers: AuthService.authHeaders, body: json.encode(cambios));
+    _checkResponse(r);
+    return UsuarioAdmin.fromJson(json.decode(utf8.decode(r.bodyBytes)));
+  }
+
+  static Future<void> eliminarUsuario(String id) async {
+    final r = await http.delete(Uri.parse('$baseUrl/usuarios_admin/$id'), headers: AuthService.authHeaders);
+    _checkResponse(r);
+  }
+
+  // =================================================================
+  // PLATAFORMA (dueño de LaborLog)
+  // =================================================================
+
+  static Future<List<Map<String, dynamic>>> getEmpresasPlataforma() async {
+    final r = await http.get(Uri.parse('$baseUrl/plataforma/empresas'), headers: AuthService.authHeaders);
+    _checkResponse(r);
+    return (json.decode(utf8.decode(r.bodyBytes)) as List).cast<Map<String, dynamic>>();
+  }
+
+  static Future<Map<String, dynamic>> crearEmpresaPlataforma(Map<String, dynamic> datos) async {
+    final r = await http.post(Uri.parse('$baseUrl/plataforma/empresas'),
+        headers: AuthService.authHeaders, body: json.encode(datos));
+    _checkResponse(r);
+    return json.decode(utf8.decode(r.bodyBytes));
+  }
+
+  static Future<Map<String, dynamic>> actualizarEmpresaPlataforma(String id, Map<String, dynamic> cambios) async {
+    final r = await http.put(Uri.parse('$baseUrl/plataforma/empresas/$id'),
+        headers: AuthService.authHeaders, body: json.encode(cambios));
+    _checkResponse(r);
+    return json.decode(utf8.decode(r.bodyBytes));
   }
 
   // =================================================================

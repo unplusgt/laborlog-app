@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import '../services/auth_service.dart';
-import '../services/api_service.dart';
 import '../models/user.dart';
 
 class HomeScreen extends StatefulWidget {
@@ -67,9 +66,11 @@ class _HomeScreenState extends State<HomeScreen> {
                     ),
                     SizedBox(height: 8),
                     if (_currentUser != null) ...[
-                      Text('Usuario: ${_currentUser!.email}'),
-                      if (_currentUser!.rol != null)
-                        Text('Rol: ${_currentUser!.rol}'),
+                      Text(_currentUser!.nombre, style: TextStyle(fontWeight: FontWeight.bold)),
+                      Text('${Roles.nombre(_currentUser!.rol)} · ${_currentUser!.empresaNombre ?? ''}'),
+                      if (AuthService.isSupervisor)
+                        Text('Ves solo tus obras asignadas (${_currentUser!.obras.length})',
+                            style: TextStyle(color: Colors.black54)),
                     ],
                   ],
                 ),
@@ -111,12 +112,19 @@ class _HomeScreenState extends State<HomeScreen> {
                     Colors.purple,
                     () => Navigator.pushNamed(context, '/obras'),
                   ),
-                  if (AuthService.isAdmin)
+                  if (AuthService.puedeGestionar)
                     _buildMenuCard(
                       'Dispositivos\n(kiosco)',
                       Icons.phone_android,
                       Colors.teal,
                       () => Navigator.pushNamed(context, '/dispositivos'),
+                    ),
+                  if (AuthService.puedeGestionar)
+                    _buildMenuCard(
+                      'Usuarios',
+                      Icons.manage_accounts,
+                      Colors.indigo,
+                      () => Navigator.pushNamed(context, '/usuarios'),
                     ),
                 ],
               ),
@@ -125,7 +133,7 @@ class _HomeScreenState extends State<HomeScreen> {
             SizedBox(height: 16),
             
             // Widget de Generar Planilla (solo administradores; el backend también lo exige)
-            if (AuthService.isAdmin) _buildPlanillaWidgetCompleto(),
+            if (AuthService.puedeVerPlanilla) _buildPlanillaWidgetCompleto(),
           ],
         ),
       ),

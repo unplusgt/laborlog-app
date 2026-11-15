@@ -8,6 +8,7 @@ class Trabajador {
   final String? fotoRegistroPath;
   final bool activo;
   final bool rostroRegistrado;
+  final int? obraId;
 
   Trabajador({
     required this.id,
@@ -19,6 +20,7 @@ class Trabajador {
     this.fotoRegistroPath,
     this.activo = true,
     this.rostroRegistrado = false,
+    this.obraId,
   });
 
   factory Trabajador.fromJson(Map<String, dynamic> json) {
@@ -34,6 +36,7 @@ class Trabajador {
       fotoRegistroPath: json['foto_registro_path'],
       activo: json['activo'] ?? true,
       rostroRegistrado: json['rostro_registrado'] ?? false,
+      obraId: json['obra_id'],
     );
   }
 
@@ -47,6 +50,7 @@ class Trabajador {
       'fecha_registro': fechaRegistro?.toIso8601String(),
       'foto_registro_path': fotoRegistroPath,
       'activo': activo,
+      'obra_id': obraId,
     };
   }
 }
